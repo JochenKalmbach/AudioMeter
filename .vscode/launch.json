@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "AudioMeter.App",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/AudioMeter.App/bin/Debug/net10.0-windows/AudioMeter.App.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/AudioMeter.App",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}
