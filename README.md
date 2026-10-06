@@ -93,6 +93,30 @@ position in:
 %APPDATA%\AudioMeter\settings.json
 ```
 
+## Continuous integration and releases
+
+- **Pull requests to `main`** run the `PR Build` workflow, which builds the
+  solution in Release configuration and runs the unit tests. Test results are
+  uploaded as an artifact.
+- **Every commit on `main`** runs the `Release` workflow: it builds, runs the
+  tests, publishes the app, zips it as `AudioMeter-v1.0.<run number>-win.zip`,
+  and publishes a GitHub release with the same version tag. The ZIP is also
+  kept as a workflow run artifact.
+- To get the app, download the ZIP from the latest
+  [release](../../releases), extract it, and run `AudioMeter.App.exe` (the
+  .NET 10 Desktop Runtime is required).
+## Continuous integration and releases
+
+- **Pull requests to `main`** run the `PR Build` workflow, which builds the
+  solution in Release configuration and runs the unit tests. Test results are
+  uploaded as an artifact.
+- **Every commit on `main`** runs the `Release` workflow: it builds, runs the
+  tests, publishes the app, zips it as `AudioMeter-v1.0.<run number>-win.zip`,
+  and publishes a GitHub release with the same version tag. The ZIP is also
+  kept as a workflow run artifact.
+- To get the app, download the ZIP from the latest
+  [release](../../releases), extract it, and run `AudioMeter.App.exe` (the
+  .NET 10 Desktop Runtime is required).
 ## Project layout
 
 - `src\AudioMeter.App` — Windows Forms UI, audio capture, device selection, and
