@@ -33,6 +33,9 @@ public sealed class SettingsStoreTests : IDisposable
         store.Save(new AppSettings
         {
             InputDeviceId = "dev1",
+            InputLevel = 72,
+            CalibrationInputDeviceId = "dev1",
+            CalibrationInputLevel = 72,
             GreenYellowLimit = 60,
             YellowRedLimit = 90,
             Calibration = Points(),
@@ -40,10 +43,64 @@ public sealed class SettingsStoreTests : IDisposable
         });
         var s = store.Load();
         Assert.Equal("dev1", s.InputDeviceId);
+        Assert.Equal(72, s.InputLevel);
+        Assert.Equal("dev1", s.CalibrationInputDeviceId);
+        Assert.Equal(72, s.CalibrationInputLevel);
         Assert.Equal(60, s.GreenYellowLimit);
         Assert.Equal(90, s.YellowRedLimit);
         Assert.Equal(14, s.Calibration.Count);
         Assert.Equal(400, s.Window!.Height);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(100)]
+    public void InputLevelBounds_AreAccepted(int value)
+    {
+        var store = Store();
+        store.Save(new AppSettings { InputLevel = value, CalibrationInputLevel = value });
+
+        var settings = store.Load();
+
+        Assert.Equal(value, settings.InputLevel);
+        Assert.Equal(value, settings.CalibrationInputLevel);
+        Assert.Null(store.LoadWarning);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(101)]
+    public void OutOfRangeInputLevels_AreIgnoredWithWarning(int value)
+    {
+        var store = Store();
+        store.Save(new AppSettings { InputLevel = value, CalibrationInputLevel = value });
+
+        var settings = store.Load();
+
+        Assert.Null(settings.InputLevel);
+        Assert.Null(settings.CalibrationInputLevel);
+        Assert.Contains("input level", store.LoadWarning, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void LegacySettings_PreserveCalibrationWithoutInventingMetadata()
+    {
+        var store = Store();
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(store.Path, $$"""
+            {
+              "inputDeviceId": "legacy-device",
+              "calibration": {{System.Text.Json.JsonSerializer.Serialize(Points())}}
+            }
+            """);
+
+        var settings = store.Load();
+
+        Assert.Equal("legacy-device", settings.InputDeviceId);
+        Assert.Equal(14, settings.Calibration.Count);
+        Assert.Null(settings.InputLevel);
+        Assert.Null(settings.CalibrationInputDeviceId);
+        Assert.Null(settings.CalibrationInputLevel);
     }
 
     [Fact]

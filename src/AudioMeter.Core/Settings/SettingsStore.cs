@@ -38,6 +38,20 @@ public sealed class SettingsStore
         }
         settings ??= new AppSettings();
 
+        bool invalidInputLevel = IsOutOfRange(settings.InputLevel) || IsOutOfRange(settings.CalibrationInputLevel);
+        if (IsOutOfRange(settings.InputLevel))
+        {
+            settings.InputLevel = null;
+        }
+        if (IsOutOfRange(settings.CalibrationInputLevel))
+        {
+            settings.CalibrationInputLevel = null;
+        }
+        if (invalidInputLevel)
+        {
+            LoadWarning = "An input level outside 0–100 was ignored.";
+        }
+
         if (!LevelZones.TryCreate(settings.GreenYellowLimit, settings.YellowRedLimit, out _, out _))
         {
             settings.GreenYellowLimit = Constants.DefaultGreenYellowLimit;
@@ -50,6 +64,8 @@ public sealed class SettingsStore
         }
         return settings;
     }
+
+    private static bool IsOutOfRange(int? value) => value is < 0 or > 100;
 
     public void Save(AppSettings settings)
     {

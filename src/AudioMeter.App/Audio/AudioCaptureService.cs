@@ -20,7 +20,7 @@ public sealed class AudioCaptureService : IDisposable
     public bool IsRunning => _capture is not null;
 
     /// <summary>Starts capture. Returns a notice when the requested device was unavailable and the default was used.</summary>
-    public string? Start(string? deviceId)
+    public string? Start(string? deviceId, bool requireExactDevice = false)
     {
         Stop();
         using var enumerator = new MMDeviceEnumerator();
@@ -33,6 +33,7 @@ public sealed class AudioCaptureService : IDisposable
                 device = enumerator.GetDevice(deviceId);
                 if (device.State != DeviceState.Active)
                 {
+                    device.Dispose();
                     device = null;
                 }
             }
@@ -42,6 +43,10 @@ public sealed class AudioCaptureService : IDisposable
             }
             if (device is null)
             {
+                if (requireExactDevice)
+                {
+                    throw new InvalidOperationException("The selected audio input is unavailable.");
+                }
                 notice = "Selected input is unavailable; using the default input.";
             }
         }

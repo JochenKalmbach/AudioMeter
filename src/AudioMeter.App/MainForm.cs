@@ -6,6 +6,7 @@ using AudioMeter.Core.Calibration;
 using AudioMeter.Core.History;
 using AudioMeter.Core.Levels;
 using AudioMeter.Core.Settings;
+using System.Runtime.InteropServices;
 
 namespace AudioMeter.App;
 
@@ -22,17 +23,21 @@ public sealed class MainForm : Form
     private readonly HistoryChartControl _chart = new() { Dock = DockStyle.Fill };
     private readonly System.Windows.Forms.Timer _watchdog = new() { Interval = 500 };
     private readonly ToolStripMenuItem _inputMenu = new("&Audio input");
-    private CalibrationTable _table;
+    private CalibrationTable _table = CalibrationTable.Default;
+    private CalibrationTable? _storedCalibration;
     private LevelZones _zones;
+    private InputLevelService? _inputLevelService;
     private CalibrationDialog? _calibrationDialog;
     private DateTime _lastLevelAt = DateTime.MinValue;
     private DateTime _lastStartAttempt = DateTime.MinValue;
     private bool _noSignal = true;
+    private bool _requireExactInputDevice;
+    private bool _calibrationStale;
 
     public MainForm()
     {
         _settings = _store.Load();
-        _table = CalibrationTable.TryCreate(_settings.Calibration, out var table, out _) ? table! : CalibrationTable.Default;
+        _storedCalibration = CalibrationTable.TryCreate(_settings.Calibration, out var table, out _) ? table : null;
         _zones = LevelZones.TryCreate(_settings.GreenYellowLimit, _settings.YellowRedLimit, out var zones, out _)
             ? zones! : LevelZones.Default;
 
@@ -76,10 +81,15 @@ public sealed class MainForm : Form
             {
                 _meter.StatusText = warning;
             }
-            StartCapture();
+            bool canStartCapture = InitializeInputConfiguration();
+            if (canStartCapture)
+            {
+                StartCapture();
+            }
             _watchdog.Start();
         };
         FormClosing += (_, _) => SaveWindow();
+        FormClosed += (_, _) => DisposeInputLevelService();
     }
 
     protected override void Dispose(bool disposing)
@@ -88,6 +98,7 @@ public sealed class MainForm : Form
         {
             _watchdog.Dispose();
             _capture.Dispose();
+            DisposeInputLevelService();
         }
         base.Dispose(disposing);
     }
@@ -120,9 +131,16 @@ public sealed class MainForm : Form
         _lastStartAttempt = DateTime.UtcNow;
         try
         {
-            string? notice = _capture.Start(_settings.InputDeviceId);
+            string? notice = _capture.Start(_settings.InputDeviceId, _requireExactInputDevice);
             _lastLevelAt = DateTime.UtcNow;
-            _meter.StatusText = notice;
+            if (_table.IsCalibrated)
+            {
+                _meter.StatusText = notice;
+            }
+            else if (notice is not null)
+            {
+                _meter.StatusText = notice;
+            }
         }
         catch (Exception ex)
         {
@@ -143,6 +161,153 @@ public sealed class MainForm : Form
         }
         _chart.SetHistory(_history.Snapshot());
         _calibrationDialog?.UpdateLevel(levelDbfs);
+    }
+
+    private bool InitializeInputConfiguration()
+    {
+        bool hasCalibrationMetadata = _settings.CalibrationInputDeviceId is not null ||
+            _settings.CalibrationInputLevel is not null;
+        if (!string.IsNullOrWhiteSpace(_settings.CalibrationInputDeviceId))
+        {
+            _settings.InputDeviceId = _settings.CalibrationInputDeviceId;
+            _requireExactInputDevice = true;
+        }
+        if (string.IsNullOrWhiteSpace(_settings.InputDeviceId))
+        {
+            try
+            {
+                _settings.InputDeviceId = InputDeviceService.List().FirstOrDefault(device => device.IsDefault)?.Id;
+            }
+            catch (Exception ex) when (ex is COMException or InvalidOperationException)
+            {
+                _meter.StatusText = $"Cannot identify the audio input: {ex.Message}";
+            }
+        }
+        if (string.IsNullOrWhiteSpace(_settings.InputDeviceId))
+        {
+            if (hasCalibrationMetadata)
+            {
+                SetCalibrationStale("The saved calibration input is unavailable; its calibration was not applied.");
+                return false;
+            }
+            RefreshCalibrationValidity();
+            return true;
+        }
+
+        try
+        {
+            ReplaceInputLevelService(_settings.InputDeviceId);
+            int? levelToRestore = hasCalibrationMetadata ? _settings.CalibrationInputLevel : _settings.InputLevel;
+            if (hasCalibrationMetadata &&
+                (string.IsNullOrWhiteSpace(_settings.CalibrationInputDeviceId) || _settings.CalibrationInputLevel is null))
+            {
+                SetCalibrationStale("The saved calibration input settings are incomplete; recalibration is required.");
+            }
+            if (levelToRestore is int savedLevel)
+            {
+                _inputLevelService!.SetLevel(savedLevel);
+            }
+            _settings.InputLevel = _inputLevelService!.CurrentLevel;
+            RefreshCalibrationValidity();
+            SaveSettings();
+            return true;
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or ArgumentException or NotSupportedException)
+        {
+            DisposeInputLevelService();
+            if (hasCalibrationMetadata)
+            {
+                SetCalibrationStale($"The saved calibration input is unavailable: {ex.Message}");
+                return true;
+            }
+            _meter.StatusText = $"Input level control is unavailable: {ex.Message}";
+            RefreshCalibrationValidity();
+            return true;
+        }
+    }
+
+    private void ReplaceInputLevelService(string deviceId)
+    {
+        DisposeInputLevelService();
+        var service = new InputLevelService(deviceId);
+        service.LevelChanged += OnInputLevelChanged;
+        _inputLevelService = service;
+    }
+
+    private void DisposeInputLevelService()
+    {
+        if (_inputLevelService is not { } service)
+        {
+            return;
+        }
+        service.LevelChanged -= OnInputLevelChanged;
+        _inputLevelService = null;
+        service.Dispose();
+    }
+
+    private void OnInputLevelChanged(string deviceId, int inputLevel)
+    {
+        BeginInvokeSafe(() =>
+        {
+            if (_inputLevelService?.DeviceId != deviceId)
+            {
+                return;
+            }
+            _settings.InputLevel = inputLevel;
+            if (_calibrationDialog is { IsDisposed: false } dialog)
+            {
+                dialog.UpdateInputLevel(inputLevel);
+            }
+            RefreshCalibrationValidity();
+        });
+    }
+
+    private void RefreshCalibrationValidity()
+    {
+        bool hasMetadata = _settings.CalibrationInputDeviceId is not null ||
+            _settings.CalibrationInputLevel is not null;
+        if (!hasMetadata)
+        {
+            _table = _storedCalibration ?? CalibrationTable.Default;
+            ApplyZonesAndCalibration();
+            return;
+        }
+
+        bool matches;
+        try
+        {
+            matches = _storedCalibration is not null &&
+                _settings.CalibrationInputDeviceId == _inputLevelService?.DeviceId &&
+                _settings.CalibrationInputLevel == _inputLevelService?.CurrentLevel;
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or NotSupportedException)
+        {
+            SetCalibrationStale($"The calibration input level is unavailable: {ex.Message}");
+            ApplyZonesAndCalibration();
+            return;
+        }
+        if (matches)
+        {
+            _table = _storedCalibration!;
+            if (_calibrationStale)
+            {
+                _meter.StatusText = null;
+                _calibrationStale = false;
+            }
+        }
+        else
+        {
+            SetCalibrationStale("Input device or input level differs from the saved calibration; recalibration is required.");
+        }
+        ApplyZonesAndCalibration();
+    }
+
+    private void SetCalibrationStale(string message)
+    {
+        _table = CalibrationTable.Default;
+        _meter.IsCalibrated = false;
+        _meter.StatusText = message;
+        _calibrationStale = true;
     }
 
     private void OnFailed(string message)
@@ -212,6 +377,18 @@ public sealed class MainForm : Form
     private void SelectInput(string deviceId)
     {
         _settings.InputDeviceId = deviceId;
+        _requireExactInputDevice = true;
+        try
+        {
+            ReplaceInputLevelService(deviceId);
+            _settings.InputLevel = _inputLevelService!.CurrentLevel;
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or ArgumentException or NotSupportedException)
+        {
+            DisposeInputLevelService();
+            SetNoSignal($"Cannot control selected input: {ex.Message}");
+        }
+        RefreshCalibrationValidity();
         SaveSettings();
         _capture.Stop();
         _noSignal = true;
@@ -233,17 +410,34 @@ public sealed class MainForm : Form
 
     private void RunCalibration()
     {
-        using var dialog = new CalibrationDialog();
-        _calibrationDialog = dialog;
+        if (_inputLevelService is not { } inputLevelService)
+        {
+            MessageBox.Show(this, "Input-level control is unavailable for the selected audio input.",
+                "AudioMeter", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         try
         {
-            if (dialog.ShowDialog(this) == DialogResult.OK && dialog.Result is { } table)
+            using var dialog = new CalibrationDialog(inputLevelService);
+            _calibrationDialog = dialog;
+            DialogResult dialogResult = dialog.ShowDialog(this);
+            _settings.InputLevel = inputLevelService.CurrentLevel;
+            if (dialogResult == DialogResult.OK && dialog.Result is { } table)
             {
                 _table = table;
+                _storedCalibration = table;
                 _settings.Calibration = table.Points.ToList();
-                SaveSettings();
-                ApplyZonesAndCalibration();
+                _settings.InputDeviceId = inputLevelService.DeviceId;
+                _settings.CalibrationInputDeviceId = inputLevelService.DeviceId;
+                _settings.CalibrationInputLevel = dialog.CalibrationInputLevel;
             }
+            RefreshCalibrationValidity();
+            SaveSettings();
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or ObjectDisposedException or NotSupportedException)
+        {
+            MessageBox.Show(this, $"Calibration could not use the selected input: {ex.Message}",
+                "AudioMeter", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         finally
         {
