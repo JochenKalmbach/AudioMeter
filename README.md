@@ -117,6 +117,21 @@ position in:
 - To get the app, download the ZIP from the latest
   [release](../../releases), extract it, and run `AudioMeter.App.exe` (the
   .NET 10 Desktop Runtime is required).
+## Dependency updates
+
+[Renovate](https://docs.renovatebot.com/) keeps NuGet packages and GitHub
+Actions up to date. It is configured in `.github/renovate.json` and requires the
+Renovate GitHub App to be installed on the repository (one-time, by the owner).
+
+- Updates are only proposed once a week, on Monday before 06:00 (Europe/Berlin).
+- Renovate opens pull requests automatically; they run the `PR Build` workflow
+  and are never merged automatically.
+- Minor and patch updates are grouped into one pull request, major updates get
+  their own labeled pull request, and at most 5 pull requests are open at once.
+- To change the schedule, edit `schedule` and `timezone` in
+  `.github/renovate.json`. To pause updates, set `"enabled": false` there or
+  uninstall the app.
+
 ## Project layout
 
 - `src\AudioMeter.App` — Windows Forms UI, audio capture, device selection, and
