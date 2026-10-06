@@ -1,4 +1,4 @@
-﻿# AudioMeter
+# AudioMeter
 
 AudioMeter is a small, always-on-top Windows sound-level monitor for churches,
 events, and other venues. It listens to a selected audio input, converts its
@@ -66,10 +66,10 @@ dotnet test tests\AudioMeter.Core.Tests\AudioMeter.Core.Tests.csproj
 
 1. Start AudioMeter. It opens as an always-on-top window and uses the selected
    input, or the Windows default capture input if none has been selected.
-2. Open **Settings â†’ Audio input** to choose an active capture device.
-3. Open **Settings â†’ Calibrateâ€¦** and follow the prompts using known reference
-   levels. Calibration samples are taken at 40, 45, â€¦, 105 dBA.
-4. Use **Settings â†’ Color limitsâ€¦** to adjust the green/yellow and yellow/red
+2. Open **Settings → Audio input** to choose an active capture device.
+3. Open **Settings → Calibrate…** and follow the prompts using known reference
+   levels. Calibration samples are taken at 40, 45, …, 105 dBA.
+4. Use **Settings → Color limits…** to adjust the green/yellow and yellow/red
    thresholds. Limits must be between 40 and 105 dBA, with the red threshold
    higher than the green threshold.
 5. Monitor the current reading in the meter and use the chart to review recent
@@ -105,10 +105,22 @@ position in:
 - To get the app, download the ZIP from the latest
   [release](../../releases), extract it, and run `AudioMeter.App.exe` (the
   .NET 10 Desktop Runtime is required).
+## Continuous integration and releases
+
+- **Pull requests to `main`** run the `PR Build` workflow, which builds the
+  solution in Release configuration and runs the unit tests. Test results are
+  uploaded as an artifact.
+- **Every commit on `main`** runs the `Release` workflow: it builds, runs the
+  tests, publishes the app, zips it as `AudioMeter-v1.0.<run number>-win.zip`,
+  and publishes a GitHub release with the same version tag. The ZIP is also
+  kept as a workflow run artifact.
+- To get the app, download the ZIP from the latest
+  [release](../../releases), extract it, and run `AudioMeter.App.exe` (the
+  .NET 10 Desktop Runtime is required).
 ## Project layout
 
-- `src\AudioMeter.App` â€” Windows Forms UI, audio capture, device selection, and
+- `src\AudioMeter.App` — Windows Forms UI, audio capture, device selection, and
   calibration dialogs.
-- `src\AudioMeter.Core` â€” level conversion, calibration, history, and settings
+- `src\AudioMeter.Core` — level conversion, calibration, history, and settings
   logic.
-- `tests\AudioMeter.Core.Tests` â€” core unit tests.
+- `tests\AudioMeter.Core.Tests` — core unit tests.
