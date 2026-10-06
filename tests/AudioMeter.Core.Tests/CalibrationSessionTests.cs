@@ -22,6 +22,19 @@ public class CalibrationSessionTests
     }
 
     [Fact]
+    public void IsLastStep_IsTrueOnlyOnFinalStep()
+    {
+        var s = new CalibrationSession();
+        for (int i = 0; i < s.StepCount - 1; i++)
+        {
+            Assert.False(s.IsLastStep);
+            Assert.Equal(ConfirmResult.Advanced, s.Confirm(-i * 5));
+        }
+
+        Assert.True(s.IsLastStep);
+    }
+
+    [Fact]
     public void NonDecreasingLevel_IsRejectedWithoutAdvancing()
     {
         var s = new CalibrationSession();

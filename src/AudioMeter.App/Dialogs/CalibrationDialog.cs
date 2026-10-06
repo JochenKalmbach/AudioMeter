@@ -11,7 +11,7 @@ public sealed class CalibrationDialog : Form
     private readonly Label _step = new() { AutoSize = true };
     private readonly Label _level = new() { AutoSize = true, Text = "Measured input: waiting for signal…" };
     private readonly Label _warning = new() { AutoSize = true, ForeColor = Color.Firebrick };
-    private readonly Button _ok = new() { Text = "OK", AutoSize = true, MinimumSize = new Size(90, 0), Enabled = false };
+    private readonly Button _ok = new() { Text = "Next", AutoSize = true, MinimumSize = new Size(90, 0), Enabled = false };
     private readonly TrackBar _inputLevel = new() { Minimum = 0, Maximum = 100, TickFrequency = 10, Width = 320 };
     private readonly Label _inputLevelText = new() { AutoSize = true };
     private readonly InputLevelService _inputLevelService;
@@ -43,7 +43,7 @@ public sealed class CalibrationDialog : Form
         {
             AutoSize = true,
             MaximumSize = new Size(380, 0),
-            Text = "Starting at 105 dBA, play each external reference level shown below and press OK to record the measured input level.",
+            Text = "Starting at 105 dBA, play each external reference level shown below and press Next to record the measured input level (Save on the last step).",
         };
         _inputLevel.Value = _sessionStartInputLevel;
         _inputLevel.ValueChanged += (_, _) => SetInputLevel(_inputLevel.Value);
@@ -99,6 +99,7 @@ public sealed class CalibrationDialog : Form
     {
         _step.Text = $"Step {_session.StepIndex + 1} of {_session.StepCount}";
         _target.Text = $"{_session.TargetDba} dBA";
+        _ok.Text = _session.IsLastStep ? "Save" : "Next";
         UpdateInputLevelState();
     }
 

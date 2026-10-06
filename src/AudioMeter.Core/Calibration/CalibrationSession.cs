@@ -18,6 +18,9 @@ public sealed class CalibrationSession
 
     public int StepCount => Constants.CalibrationStepCount;
 
+    /// <summary>True when the current step is the final calibration point.</summary>
+    public bool IsLastStep => StepIndex == StepCount - 1;
+
     public int TargetDba => (int)Constants.ScaleMaxDba - StepIndex * Constants.CalibrationStepDba;
 
     public int? InputLevelAtFirstPoint { get; private set; }
