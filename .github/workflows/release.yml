@@ -15,7 +15,7 @@ jobs:
   release:
     runs-on: windows-latest
     env:
-      VERSION: v1.0.${{ github.run_number }}
+      RELEASE_VERSION: v1.0.${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,15 +36,15 @@ jobs:
         run: dotnet publish src/AudioMeter.App/AudioMeter.App.csproj -c Release --no-build -o publish
 
       - name: Create ZIP
-        run: Compress-Archive -Path publish\* -DestinationPath "AudioMeter-$env:VERSION-win.zip"
+        run: Compress-Archive -Path publish\* -DestinationPath "AudioMeter-$env:RELEASE_VERSION-win.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AudioMeter-${{ env.VERSION }}-win
-          path: AudioMeter-${{ env.VERSION }}-win.zip
+          name: AudioMeter-${{ env.RELEASE_VERSION }}-win
+          path: AudioMeter-${{ env.RELEASE_VERSION }}-win.zip
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$env:VERSION" "AudioMeter-$env:VERSION-win.zip" --target "${{ github.sha }}" --title "$env:VERSION" --generate-notes
+        run: gh release create "$env:RELEASE_VERSION" "AudioMeter-$env:RELEASE_VERSION-win.zip" --target "${{ github.sha }}" --title "$env:RELEASE_VERSION" --generate-notes
