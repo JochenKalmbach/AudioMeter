@@ -17,7 +17,7 @@ measurement.
   green through 70 dBA, yellow through 85 dBA, red above 85 dBA).
 - A scrolling chart of recent readings covering up to 90 minutes.
 - Selection of active Windows audio capture devices.
-- Guided calibration from 40 to 105 dBA in 5 dBA steps.
+- Guided calibration from 40 to 105 dBA in 5 dBA steps, or direct editing of the calibration table.
 - Saved calibration associated with its audio input and input gain; the app
   indicates when a device or gain change makes recalibration necessary.
 - Automatic saving of display settings and selected input.
@@ -67,8 +67,12 @@ dotnet test tests\AudioMeter.Core.Tests\AudioMeter.Core.Tests.csproj
 1. Start AudioMeter. It opens as an always-on-top window and uses the selected
    input, or the Windows default capture input if none has been selected.
 2. Open **Settings → Audio input** to choose an active capture device.
-3. Open **Settings → Calibrate…** and follow the prompts using known reference
-   levels. Calibration samples are taken at 40, 45, …, 105 dBA.
+3. Open **Settings → Calibration → Step-by-step…** and follow the prompts using
+   known reference levels. Calibration samples are taken at 40, 45, …, 105 dBA.
+   Alternatively, use **Settings → Calibration → Edit table…** to type the dBFS
+   value for each dBA row (-120 to 0, strictly increasing). The dialog shows the
+   live dBFS and the resulting dBA for the edited table; valid edits apply to the
+   meter immediately, **Save** stores them and **Cancel** reverts.
 4. Use **Settings → Color limits…** to adjust the green/yellow and yellow/red
    thresholds. Limits must be between 40 and 105 dBA, with the red threshold
    higher than the green threshold.
