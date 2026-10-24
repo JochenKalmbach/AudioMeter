@@ -28,6 +28,7 @@ public sealed class MainForm : Form
     private LevelZones _zones;
     private InputLevelService? _inputLevelService;
     private CalibrationDialog? _calibrationDialog;
+    private CalibrationTableDialog? _tableDialog;
     private DateTime _lastLevelAt = DateTime.MinValue;
     private DateTime _lastStartAttempt = DateTime.MinValue;
     private bool _noSignal = true;
@@ -57,11 +58,15 @@ public sealed class MainForm : Form
         var menu = new MenuStrip();
         var settingsMenu = new ToolStripMenuItem("&Settings");
         var limits = new ToolStripMenuItem("&Color limits…");
-        var calibrate = new ToolStripMenuItem("C&alibrate…");
+        var calibrate = new ToolStripMenuItem("C&alibration");
+        var calibrateSteps = new ToolStripMenuItem("&Step-by-step…");
+        var calibrateTable = new ToolStripMenuItem("&Edit table…");
+        calibrate.DropDownItems.AddRange(new ToolStripItem[] { calibrateSteps, calibrateTable });
         _inputMenu.DropDownOpening += (_, _) => PopulateInputMenu();
         _inputMenu.DropDownItems.Add(new ToolStripMenuItem("(loading)") { Enabled = false });
         limits.Click += (_, _) => EditLimits();
-        calibrate.Click += (_, _) => RunCalibration();
+        calibrateSteps.Click += (_, _) => RunCalibration();
+        calibrateTable.Click += (_, _) => RunCalibrationTable();
         settingsMenu.DropDownItems.AddRange(new ToolStripItem[] { _inputMenu, limits, calibrate });
         menu.Items.Add(settingsMenu);
         MainMenuStrip = menu;
@@ -161,6 +166,7 @@ public sealed class MainForm : Form
         }
         _chart.SetHistory(_history.Snapshot());
         _calibrationDialog?.UpdateLevel(levelDbfs);
+        _tableDialog?.UpdateLevel(levelDbfs);
     }
 
     private bool InitializeInputConfiguration()
@@ -264,6 +270,11 @@ public sealed class MainForm : Form
 
     private void RefreshCalibrationValidity()
     {
+        if (_tableDialog is { IsDisposed: false })
+        {
+            // Keep the live preview of the table being edited.
+            return;
+        }
         bool hasMetadata = _settings.CalibrationInputDeviceId is not null ||
             _settings.CalibrationInputLevel is not null;
         if (!hasMetadata)
@@ -322,6 +333,7 @@ public sealed class MainForm : Form
         _meter.Dba = null;
         _meter.StatusText = message;
         _calibrationDialog?.ClearLevel();
+        _tableDialog?.ClearLevel();
     }
 
     private void OnWatchdog()
@@ -442,6 +454,49 @@ public sealed class MainForm : Form
         finally
         {
             _calibrationDialog = null;
+        }
+    }
+
+    private void RunCalibrationTable()
+    {
+        try
+        {
+            using var dialog = new CalibrationTableDialog(_table);
+            _tableDialog = dialog;
+            dialog.TableChanged += table =>
+            {
+                _table = table;
+                ApplyZonesAndCalibration();
+            };
+            DialogResult dialogResult = dialog.ShowDialog(this);
+            _tableDialog = null;
+            if (dialogResult == DialogResult.OK && dialog.Result is { } table)
+            {
+                _storedCalibration = table;
+                _settings.Calibration = table.Points.ToList();
+                if (_inputLevelService is { } inputLevelService)
+                {
+                    _settings.InputDeviceId = inputLevelService.DeviceId;
+                    _settings.CalibrationInputDeviceId = inputLevelService.DeviceId;
+                    _settings.CalibrationInputLevel = inputLevelService.CurrentLevel;
+                }
+                else
+                {
+                    _settings.CalibrationInputDeviceId = null;
+                    _settings.CalibrationInputLevel = null;
+                }
+                SaveSettings();
+            }
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or ObjectDisposedException or NotSupportedException)
+        {
+            MessageBox.Show(this, $"Calibration could not use the selected input: {ex.Message}",
+                "AudioMeter", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            _tableDialog = null;
+            RefreshCalibrationValidity();
         }
     }
 
